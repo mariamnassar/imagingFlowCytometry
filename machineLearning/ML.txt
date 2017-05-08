@@ -1,8 +1,0 @@
-- scikit package
-- Prepocessing:
-http://scikit-learn.org/stable/modules/preprocessing.html#preprocessing
-- cross_validation
-http://scikit-learn.org/stable/modules/cross_validation.ht
-- naive bayes
-http://scikit-learn.org/stable/modules/naive_bayes.html
-- http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html#sklearn.model_selection.train_test_split
