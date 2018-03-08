@@ -16,11 +16,11 @@ from operator import itemgetter
 from collections import Counter
 import matplotlib
 import matplotlib.pyplot as plt
-    
+
 cell_types = ["B", "T", "eosinophil", "monocyte", "neutrophil"]
-input_dir = "../../CPOutputWhiteCells/2014_2015"	#the folder which contains the folders with the CP output for each patient id in patient_ids
-output_dir = "MLOutput/"
-montages_dir = "../../Montages"
+input_dir = ""	#the folder which contains the folders with the CP output for each patient id in patient_ids
+output_dir = ""
+montages_dir = ""
 
 # for each cell_type create an entry (cell_type, list cell_type = [[patient_id1, num of montages for this patient in all batches], [patient_id2, num of montages..], ..]) in the montages_numbers_dic
 montages_numbers_dic = dict()
@@ -55,6 +55,7 @@ for cell_type in cell_types:
 	cell_type_data = pandas.read_csv("".join([input_dir, "/", cell_type, "/", data_filename]), sep='\t')
 	ground_truth_list = [cell_type] * len(cell_type_data)
 	cell_type_data = cell_type_data.drop(exclude_features, axis=1)
+	cell_type_data = cell_type_data[cell_type_data.columns.drop(list(cell_type_data.filter(regex='Marker_image')))]
 	cell_type_data = cell_type_data.assign(ground_truth = ground_truth_list)
 	cell_type_montages_numbers = montages_numbers_dic.get(cell_type)
 	for tupl in cell_type_montages_numbers:
@@ -79,7 +80,6 @@ patients_ground_truth = [patient_data['ground_truth'] for patient_data in patien
 # remove the ground_truth column
 patients_data = [patient_data.drop('ground_truth', axis = 1) for patient_data in patients_data]
 
-
 os.chdir(output_dir)
 
 
@@ -88,6 +88,7 @@ def plot_cm(plot_file_name, cm_diag):
     bar_labels = cell_types
     opacity = 0.8
     y_pos = numpy.arange(len(bar_labels))
+    plt.ylim(ymax=1)
     plt.bar(y_pos, cm_diag, alpha=opacity, align='center', color='blue')
     plt.ylabel('Percent of cells correctly classifed')
     plt.xticks(y_pos, bar_labels)
@@ -117,13 +118,13 @@ def plot_cm_comp(plot_file_name, cm_diags_cell_type, num_cells_cell_type):
 
 
 ### The plot function for the comparison of the number of cells (patients, average WBC count)###
-def plot_wbc_count(plot_file_name, wbc_count_patient, wbc_counts_avg):
+def plot_wbc_count(plot_file_name, wbc_count_patient, wbc_counts_avg, comp_to):
 	bar_labels = cell_types
 	bar_width = 0.35
 	opacity = 0.8
 	y_pos = numpy.arange(len(bar_labels))
 	plt.bar(y_pos, wbc_count_patient, bar_width, alpha=opacity, align='center', color='red', label='patient')
-	plt.bar(y_pos + bar_width, wbc_counts_avg, bar_width, alpha=opacity, align='center', color='green', label='average')
+	plt.bar(y_pos + bar_width, wbc_counts_avg, bar_width, alpha=opacity, align='center', color='green', label=comp_to)
 	plt.ylabel('Percent of cells')
 	plt.xticks(y_pos + bar_width/2, bar_labels)
 	plt.ylim(0.0, 1.0)
@@ -133,13 +134,46 @@ def plot_wbc_count(plot_file_name, wbc_count_patient, wbc_counts_avg):
 	plt.savefig(plt_name)
 	plt.clf()
 
+def plot_std(plot_file_name, std):
+    bar_labels = cell_types
+    opacity = 0.8
+    y_pos = numpy.arange(len(bar_labels))
+    plt.bar(y_pos, std, alpha=opacity, align='center', color='blue')
+    plt.ylabel('standard deviation')
+    plt.xticks(y_pos, bar_labels)
+    plt.ylim(0.0, 1.0)
+    plt.title(plot_file_name)
+    plt_name = plot_file_name + '_plt.png'
+    plt.savefig(plt_name)
+    plt.clf()
+  
+#def plot_avg_std(plot_file_name, avg, std):
+#    bar_labels = cell_types
+#    bar_width = 0.35
+#    opacity = 0.8
+#    y_pos = numpy.arange(len(bar_labels))
+#    plt.bar(y_pos, avg, bar_width, alpha=opacity, align='center', color='blue', label='average')
+#    plt.bar(y_pos + bar_width, std, bar_width, align='center', color='gray', label='error rate')
+#    plt.xticks(y_pos, bar_labels)
+#    plt.title(plot_file_name)
+#    plt_name = plot_file_name + '_plt.png'
+#    plt.savefig(plt_name)
+#    plt.clf()	  
 
+def write_feature_importances_to_file (feature_importances, name, i):
+	feature_importances_file = open('feature_importances_' + name + str(i) + '.txt', 'w+')
+	feature_importances_file.write("Features sorted by their score:\n")
+	for tupl in feature_importances:
+		feature_importances_file.write(tupl[1] + ":  " + str(tupl[0]) + "\n")
+	feature_importances_file.close()
+
+ 
 ### Machine Learning ###
 names_classifiers = []
-names_classifiers.append(('NaiveBayes', GaussianNB()))
 names_classifiers.append(('RandomForest', RandomForestClassifier()))
-#names_classifiers.append(('AdaBoost', AdaBoostClassifier()))
+names_classifiers.append(('NaiveBayes', GaussianNB()))
 names_classifiers.append(('GradientBoosting', GradientBoostingClassifier()))
+#names_classifiers.append(('AdaBoost', AdaBoostClassifier()))
 
 
 
@@ -148,14 +182,35 @@ for name, classifier in names_classifiers:
 	wbc_counts = [] #a list of the wbc_count for each patient : wbc_count = [#B/sum_cells, #T/sum_cells,..]
 	wbc_counts_sum = [0] * len(cell_types)  #a list of the sums of wbc_counts over all patients
 	for i in range(0,len(patients_data)):
-		test_data = patients_data[i]
-		#test_data = pandas.DataFrame(preprocessing.scale(test_data.values, axis=0))
-		test_ground_truth = patients_ground_truth[i]
 		#combine pandas train frames
 		train_data = pandas.concat(patients_data[:i]+patients_data[i+1:])
-		#train_data = pandas.DataFrame(preprocessing.scale(train_data.values, axis=0))
+		print(train_data.shape)
+		# remove low variance features
+		selector = VarianceThreshold(.1)
+		columns = train_data.columns
+		train_data = selector.fit_transform(train_data)
+		labels = [columns[i] for i in selector.get_support(indices=True)]
+		train_data = pandas.DataFrame(train_data, columns=labels)
+		print(train_data.shape)
+		# Features standardization- skip this, it gives worse results
+		#norm_train_data = pandas.DataFrame(columns=train_data.columns)
+		#for feature_name in train_data.columns:
+		#	norm_train_data[feature_name] = (train_data[feature_name] - train_data[feature_name].mean()) / train_data[feature_name].std()
+		#train_data = norm_train_data
 		train_ground_truth = pandas.concat(patients_ground_truth[:i]+patients_ground_truth[i+1:])
+		test_data = patients_data[i][labels]
+		# Features standardization - skip this, it gives worse results
+		#norm_test_data = pandas.DataFrame(columns=test_data.columns)
+		#for feature_name in test_data.columns:
+		#	norm_test_data[feature_name] = (test_data[feature_name] - test_data[feature_name].mean()) / test_data[feature_name].std()
+		#test_data = norm_test_data
+		test_ground_truth = patients_ground_truth[i]
 		classifier.fit(train_data, train_ground_truth)
+		#best features
+		if name != 'NaiveBayes' :
+			feature_names = train_data.columns
+			feature_importances = sorted(zip(classifier.feature_importances_, feature_names),reverse=True)
+			write_feature_importances_to_file(feature_importances, name, i)
 		prediction = classifier.predict(test_data)
 		cm = confusion_matrix(test_ground_truth, prediction, labels = cell_types)
 		cm_diag = cm.diagonal()
@@ -183,13 +238,16 @@ for name, classifier in names_classifiers:
 		standard_deviation_cm_diag.append(numpy.std(cm_diags_cell_type))
 		plot_cm_comp(name + '_' + cell_types[j], cm_diags_cell_type, num_cells_cell_type)
 	plot_cm(name + '_avg_cm', avg_cm_diag)
-	plot_cm(name + '_standard_deviation_cm', standard_deviation_cm_diag)
+	plot_std(name + '_standard_deviation_cm', standard_deviation_cm_diag)
+	#plot_avg_std(name + '_standard_deviation_avg', avg_cm_diag, standard_deviation_cm_diag)
 	###Plot the wbc_counts###
 	wbc_counts_avg = numpy.array(wbc_counts_sum) / len(patients_data)
 	for i in range(0,len(patients_data)):
-		plot_file_name = name + "_" + str(i) + "_wbc_count"
-		plot_wbc_count(plot_file_name, wbc_counts[i], wbc_counts_avg)
-		
+		plot_file_name_1 = name + "_" + str(i+1) + "_wbc_count_avg"
+		plot_file_name_2 = name + "_" + str(i+1) + "_wbc_count_ref"
+		wbc_counts_ref = [0.045, 0.24, 0.023, 0.053, 0.624]
+		plot_wbc_count(plot_file_name_1, wbc_counts[i], wbc_counts_avg, 'average')
+		plot_wbc_count(plot_file_name_2, wbc_counts[i], wbc_counts_ref, 'reference')
 
 ###Write the number of cells to files###
 num_cells_file = open('number_of_cels', 'w+')		
