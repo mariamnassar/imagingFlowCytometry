@@ -18,9 +18,9 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 cell_types = ["B", "T", "eosinophil", "monocyte", "neutrophil"]
-input_dir = ""	#the folder which contains the folders with the CP output for each patient id in patient_ids
-output_dir = ""
-montages_dir = ""
+input_dir = "/users/stud00/mn260/CS/ifc/working_dir/Cell_Profiler_Data/CP_Features_White_Cells"	#the folder which contains the folders with the CP output for each patient id in patient_ids
+output_dir = "/users/stud00/mn260/CS/ifc/working_dir/Machine_Learning_Outputs/White_Blood_Cells/Cross_Validation/MLOutput_low_var_0.001"
+montages_dir = "/users/stud00/mn260/CS/ifc/working_dir/Stained_Montages"
 
 # for each cell_type create an entry (cell_type, list cell_type = [[patient_id1, num of montages for this patient in all batches], [patient_id2, num of montages..], ..]) in the montages_numbers_dic
 montages_numbers_dic = dict()
@@ -88,7 +88,7 @@ def plot_cm(plot_file_name, cm_diag):
     bar_labels = cell_types
     opacity = 0.8
     y_pos = numpy.arange(len(bar_labels))
-    plt.ylim(ymax=1)
+    plt.ylim(0.0, 1.10)
     plt.bar(y_pos, cm_diag, alpha=opacity, align='center', color='blue')
     plt.ylabel('Percent of cells correctly classifed')
     plt.xticks(y_pos, bar_labels)
@@ -100,12 +100,13 @@ def plot_cm(plot_file_name, cm_diag):
 
 ### The plot function for the comparison of the confusion matrix diagonals for some cell type###
 def plot_cm_comp(plot_file_name, cm_diags_cell_type, num_cells_cell_type):
-	bar_labels = patients_ids
+	bar_labels = numpy.arange(len(patients_ids)) + 1
 	opacity = 0.8
 	y_pos = numpy.arange(len(bar_labels))
 	rects = plt.bar(y_pos, cm_diags_cell_type, alpha=opacity, align='center', color='blue')
-	plt.ylim(ymax=1.10)
+	plt.ylim(0.0, 1.10)
 	plt.ylabel('Percent of cells correctly classifed')
+	plt.xlabel('Subjects')
 	plt.xticks(y_pos, bar_labels)
 	plt.title(plot_file_name, y=1.05)
 	for j in range(0,len(rects)):
@@ -127,7 +128,7 @@ def plot_wbc_count(plot_file_name, wbc_count_patient, wbc_counts_avg, comp_to):
 	plt.bar(y_pos + bar_width, wbc_counts_avg, bar_width, alpha=opacity, align='center', color='green', label=comp_to)
 	plt.ylabel('Percent of cells')
 	plt.xticks(y_pos + bar_width/2, bar_labels)
-	plt.ylim(0.0, 1.0)
+	plt.ylim(0.0, 1.10)
 	plt.title(plot_file_name)
 	plt_name = plot_file_name + '_plt.png'
 	plt.legend()
@@ -141,25 +142,27 @@ def plot_std(plot_file_name, std):
     plt.bar(y_pos, std, alpha=opacity, align='center', color='blue')
     plt.ylabel('standard deviation')
     plt.xticks(y_pos, bar_labels)
-    plt.ylim(0.0, 1.0)
+    plt.ylim(0.0, 1.10)
     plt.title(plot_file_name)
     plt_name = plot_file_name + '_plt.png'
     plt.savefig(plt_name)
     plt.clf()
-  
-#def plot_avg_std(plot_file_name, avg, std):
-#    bar_labels = cell_types
-#    bar_width = 0.35
-#    opacity = 0.8
-#    y_pos = numpy.arange(len(bar_labels))
-#    plt.bar(y_pos, avg, bar_width, alpha=opacity, align='center', color='blue', label='average')
-#    plt.bar(y_pos + bar_width, std, bar_width, align='center', color='gray', label='error rate')
-#    plt.xticks(y_pos, bar_labels)
-#    plt.title(plot_file_name)
-#    plt_name = plot_file_name + '_plt.png'
-#    plt.savefig(plt_name)
-#    plt.clf()	  
 
+def plot_avg_std(plot_file_name, avg, std):
+    bar_labels = cell_types
+    opacity = 0.8
+    plt.ylim(0.0, max(1.10, 0.1 + max(numpy.add(avg,std))))
+    y_pos = numpy.arange(len(bar_labels))
+    plt.bar(y_pos, avg, yerr=std, alpha=opacity, align='center', color='blue', error_kw=dict(ecolor='black', lw=2, capsize=4, capthick=1.5))
+    plt.ylabel('average prediction accuracy')
+    plt.xticks(y_pos, bar_labels)
+    #plt.title(plot_file_name)
+    plt_name = plot_file_name + '_plt.png'
+    #plt.legend(loc='center')
+    plt.savefig(plt_name)
+    plt.clf()
+    
+    
 def write_feature_importances_to_file (feature_importances, name, i):
 	feature_importances_file = open('feature_importances_' + name + str(i) + '.txt', 'w+')
 	feature_importances_file.write("Features sorted by their score:\n")
@@ -167,7 +170,21 @@ def write_feature_importances_to_file (feature_importances, name, i):
 		feature_importances_file.write(tupl[1] + ":  " + str(tupl[0]) + "\n")
 	feature_importances_file.close()
 
- 
+
+def write_ith_cm_to_file(classifier, i ,normalized_cm):
+	cm_file_name = classifier + str(i+1) + '_cm.txt'
+	cm_file = open(cm_file_name, 'w+')
+	cm_file.write(str(normalized_cm))
+	cm_file.close()
+
+
+def write_avg_cm_to_file(classifier, avg_cm_diag):
+	avg_cm_file = open(classifier + '_avg_cm_diag.txt', 'w+')
+	for i in range(0, len(cell_types)):
+		avg_cm_file.write(cell_types[i] + ": " + str(avg_cm_diag[i]) + "\n")
+	avg_cm_file.close()
+
+
 ### Machine Learning ###
 names_classifiers = []
 names_classifiers.append(('RandomForest', RandomForestClassifier()))
@@ -184,21 +201,23 @@ for name, classifier in names_classifiers:
 	for i in range(0,len(patients_data)):
 		#combine pandas train frames
 		train_data = pandas.concat(patients_data[:i]+patients_data[i+1:])
-		print(train_data.shape)
-		# remove low variance features
-		selector = VarianceThreshold(.1)
-		columns = train_data.columns
-		train_data = selector.fit_transform(train_data)
-		labels = [columns[i] for i in selector.get_support(indices=True)]
-		train_data = pandas.DataFrame(train_data, columns=labels)
-		print(train_data.shape)
+		#print(train_data.shape)
+		# remove low variance features: skip this step, it decreases the accuracy
+		#selector = VarianceThreshold(.001)
+		#columns = train_data.columns
+		#train_data = selector.fit_transform(train_data)
+		#labels = [columns[i] for i in selector.get_support(indices=True)]
+		#train_data = pandas.DataFrame(train_data, columns=labels)
+		#print(train_data.shape)
 		# Features standardization- skip this, it gives worse results
 		#norm_train_data = pandas.DataFrame(columns=train_data.columns)
 		#for feature_name in train_data.columns:
 		#	norm_train_data[feature_name] = (train_data[feature_name] - train_data[feature_name].mean()) / train_data[feature_name].std()
 		#train_data = norm_train_data
 		train_ground_truth = pandas.concat(patients_ground_truth[:i]+patients_ground_truth[i+1:])
-		test_data = patients_data[i][labels]
+		test_data = patients_data[i]
+		# remove the features with low variance (also removed from the train data)
+		#test_data = test_data[labels]
 		# Features standardization - skip this, it gives worse results
 		#norm_test_data = pandas.DataFrame(columns=test_data.columns)
 		#for feature_name in test_data.columns:
@@ -223,10 +242,7 @@ for name, classifier in names_classifiers:
 		normalized_cm = cm / row_sums[:, numpy.newaxis]
 		numpy.set_printoptions(precision=3, suppress=True)
 		cm_diag = normalized_cm.diagonal()
-		cm_file_name = name + str(i+1) + '_cm.txt'
-		cm_file = open(cm_file_name, 'w+')
-		cm_file.write(str(normalized_cm))
-		cm_file.close()
+		write_ith_cm_to_file(name, i ,normalized_cm)
 		cm_diags_list.append(cm_diag)
 		plot_cm(name + str(i+1), cm_diag)
 	avg_cm_diag = []
@@ -238,8 +254,9 @@ for name, classifier in names_classifiers:
 		standard_deviation_cm_diag.append(numpy.std(cm_diags_cell_type))
 		plot_cm_comp(name + '_' + cell_types[j], cm_diags_cell_type, num_cells_cell_type)
 	plot_cm(name + '_avg_cm', avg_cm_diag)
+	write_avg_cm_to_file(name, avg_cm_diag)
 	plot_std(name + '_standard_deviation_cm', standard_deviation_cm_diag)
-	#plot_avg_std(name + '_standard_deviation_avg', avg_cm_diag, standard_deviation_cm_diag)
+	plot_avg_std(name + '_avg_cm_std', avg_cm_diag, standard_deviation_cm_diag)
 	###Plot the wbc_counts###
 	wbc_counts_avg = numpy.array(wbc_counts_sum) / len(patients_data)
 	for i in range(0,len(patients_data)):
@@ -250,10 +267,10 @@ for name, classifier in names_classifiers:
 		plot_wbc_count(plot_file_name_2, wbc_counts[i], wbc_counts_ref, 'reference')
 
 ###Write the number of cells to files###
-num_cells_file = open('number_of_cels', 'w+')		
+num_cells_file = open('number_of_cels', 'w+')
 for i in range(0, len(num_cells)):
 	num_cells_file.write(patients_ids[i]+ "   ")
-	for j in range(0,5):
+	for j in range(0,len(cell_types)):
 		num_cells_file.write("        " + cell_types[j]+ ": " + str(num_cells[i][j]))
 	num_cells_file.write("\n")
 num_cells_file.close() 
