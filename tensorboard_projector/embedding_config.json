@@ -6,10 +6,10 @@
        1000,
        50
      ],
-     "tensorPath": "https://raw.githubusercontent.com/minh-doan/MLCP/tensorboard_projector/images/Mariam_files/data.tsv",
-     "metadataPath": "https://raw.githubusercontent.com/minh-doan/MLCP/tensorboard_projector/images/Mariam_files/metadata.tsv",
+     "tensorPath": "https://raw.githubusercontent.com/mariamnassar/imagingFlowCytometry/master/tensorboard_projector/data.tsv",
+     "metadataPath": "https://raw.githubusercontent.com/mariamnassar/imagingFlowCytometry/master/tensorboard_projector/metadata.tsv",
      "sprite": {
-       "imagePath": "https://raw.githubusercontent.com/minh-doan/MLCP/tensorboard_projector/images/Mariam_files/sprite.png",
+       "imagePath": "https://raw.githubusercontent.com/mariamnassar/imagingFlowCytometry/master/tensorboard_projector/sprite.png",
        "singleImageDim": [
          55,
          55
